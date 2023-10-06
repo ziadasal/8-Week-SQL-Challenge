@@ -1,0 +1,31 @@
+SELECT TOP (1000) [order_id]
+      ,[customer_id]
+      ,[pizza_id]
+      ,[exclusions]
+      ,[extras]
+      ,[order_time]
+  FROM [week 2].[dbo].[customer_orders]
+SELECT TOP (1000) [pizza_id]
+      ,[pizza_name]
+  FROM [week 2].[dbo].[pizza_names]
+
+SELECT TOP (1000) [pizza_id]
+      ,[toppings]
+  FROM [week 2].[dbo].[pizza_recipes]
+
+SELECT TOP (1000) [topping_id]
+      ,[topping_name]
+  FROM [week 2].[dbo].[pizza_toppings]
+
+SELECT TOP (1000) [order_id]
+      ,[runner_id]
+      ,[pickup_time]
+      ,[distance]
+      ,[duration]
+      ,[cancellation]
+  FROM [week 2].[dbo].[runner_orders]
+
+SELECT TOP (1000) [runner_id]
+      ,[registration_date]
+  FROM [week 2].[dbo].[runners]
+
