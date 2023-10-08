@@ -35,7 +35,6 @@ I utilized SQL to clean and analyze the data, applying basic calculations to ass
 comming soon...
 
 
-
 ## How to Run the SQL Scripts
 
 If you'd like to test my solutions or explore the code, follow these steps:
