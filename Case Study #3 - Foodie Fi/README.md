@@ -458,6 +458,46 @@ Example outputs for this table might look like the following:
 | 18          | 2       | pro monthly   | 2020-09-13   | 19.90  | 3              |
 | 18          | 2       | pro monthly   | 2020-10-13   | 19.90  | 4              |
 
+**Answer:**
+  
+  ```sql
+  with dataRecurtion as (
+select s.customer_id,
+		p.plan_id,
+		p.plan_name,
+		s.start_date payment_date,
+		case when lead(s.start_date) over(partition by s.customer_id order by start_date) is null then '2020-12-31'
+		else DATEADD(month,
+		  DATEDIFF(MONTH, start_date, LEAD(s.start_date) OVER(PARTITION BY s.customer_id ORDER BY s.start_date)),start_date) 
+		end last_date,
+		p.price amount
+from subscriptions s
+join plans p
+on s.plan_id = p.plan_id
+where p.plan_id <> 0 and year(start_date) ='2020'
+union all
+
+select 
+	customer_id,
+	plan_id,
+	plan_name,
+	DATEADD(MONTH, 1, payment_date) AS payment_date,
+    last_date,
+	amount
+from dataRecurtion
+WHERE DATEADD(MONTH, 1, payment_date) <= last_date AND plan_name != 'pro annual'
+
+)
+
+
+select customer_id,plan_id,plan_name,payment_date,amount,ROW_NUMBER() over (partition by customer_id order by payment_date) payment_order
+into payment
+from dataRecurtion
+where amount is not null
+order by customer_id
+```
+
+
 
 ****
 ## D. Outside The Box Questions
@@ -466,63 +506,125 @@ Example outputs for this table might look like the following:
 - If you want to incorporate the data in 2021 to see the whole picture (quarterly, 2020-2021 comparison, etc.), 
 create a new ```payments``` table and change all the date conditions in part C to '2021-12-31'
 
-```TSQL
-WITH monthlyRevenue AS (
-  SELECT 
-    MONTH(payment_date) AS months,
-    SUM(amount) AS revenue
-  FROM payments
-  GROUP BY MONTH(payment_date)
+```sql
+with c1 as (
+select  MONTH(payment_date)  month, sum(amount) total
+from payment
+group by MONTH(payment_date)
 )
 
-SELECT 
-  months,
-  revenue,
-  (revenue-LAG(revenue) OVER(ORDER BY months))/revenue AS revenue_growth
-FROM monthlyRevenue;
+select month,total,(total-LAG(total) over(order by month))*100/total rate_of_growth
+from c1
+order by month
 ```
-| months | revenue  | revenue_growth  |
-|--------|----------|-----------------|
-| 1      | 1282.00  | NULL            |
-| 2      | 2792.60  | 0.540929        |
-| 3      | 4342.40  | 0.356899        |
-| 4      | 5972.70  | 0.272958        |
-| 5      | 7324.10  | 0.184514        |
-| 6      | 8765.50  | 0.164440        |
-| 7      | 10207.50 | 0.141268        |
-| 8      | 12047.40 | 0.152721        |
-| 9      | 12913.20 | 0.067047        |
-| 10     | 14952.50 | 0.136385        |
-| 11     | 12862.70 | -0.162469       |
-| 12     | 13429.50 | 0.042205        |
+|month  |total	|rate_of_growth|
+|-------|-------|--------------|
+|1	|1282.00|	NULL|
+|2	|2792.60|	54.092959|
+|3	|4342.40|	35.689941|
+|4	|5972.70|	27.295862|
+|5	|7324.10|	18.451413|
+|6	|8765.50|	16.444013|
+|7	|10227.40|	14.293955|
+|8	|12067.30|	15.246989|
+|9	|12933.10|	6.694450|
+|10	|14972.40|	13.620394|
+|11	|12882.60|	-16.221880|
+|12	|13449.40|	4.214314|
+
 
 ### 2. What key metrics would you recommend Foodie-Fi management to track over time to assess performance of their overall business?
-- Monthly revenue growth: How does Foodie-Fi's revenue increase or decrease by monthly? Are there any months that the number of customers increasing significantly?
-- Customers growth: How many customers increase by monthly? How does the rate look like (x1.5, x2,... after each month)? 
-- Conversion rate: How many customers keep using Foodie-Fi after trial? How does the rate look like (x1.5, x2,...after each month)?
-- Churn rate: How many customers cancel the subscription by monthly? What plan they has used?
+
+- **Customer Churn Rate:** Customer churn rate is often regarded as one of the most critical metrics. It measures the percentage of customers who cancel their subscriptions. A high churn rate can erode revenue and profitability, making it crucial to monitor and reduce churn.
+
+- **Customer Lifetime Value (CLV):** CLV represents the total revenue a customer is expected to generate over their lifetime as a subscriber. It helps in determining the long-term value of acquiring and retaining customers, which is essential for sustainable growth.
+
+- **Average Revenue Per User (ARPU):** ARPU measures the average monthly or annual revenue generated per customer. It provides insights into the revenue performance of the customer base and is valuable for assessing pricing and revenue strategies.
+
+- **Customer Retention Rate:** While churn measures customers lost, retention rate measures customers retained. A high retention rate indicates customer loyalty and can lead to increased revenue over time.
+
+- **Monthly Recurring Revenue (MRR) and Annual Recurring Revenue (ARR):** MRR and ARR provide a clear picture of the predictable, recurring revenue generated from monthly and annual subscriptions. These metrics are vital for understanding revenue stability and growth potential.
 
 ### 3. What are some key customer journeys or experiences that you would analyse further to improve customer retention?
-- Customers who downgraded their plan
-- Customers who upgraded from basic monthly to pro monthly or pro annual
-- Customers who cancelled the subscription
+
+- Trial Conversion Journey:
+
+  - Analyze the journey of trial users who decide to convert to paid plans.
+  
+  - Understand the factors that influence their decision to upgrade.
+  - Offer personalized incentives or discounts to encourage trial users to convert to paid plans.
+
+- Plan Upgrade Path:
+
+  - Study the paths that customers take when upgrading from lower-tier plans to higher-tier plans.
+  - Identify triggers that prompt upgrades, such as increased engagement or content consumption.
+  - Streamline the upgrade process and provide transparent information about the benefits of higher-tier plans.
 
 ### 4. If the Foodie-Fi team were to create an exit survey shown to customers who wish to cancel their subscription, what questions would you include in the survey?
-- What is the primary reason for the cancellation? 
-  + Price
-  + Techinical issues
-  + Customer support
-  + Found an alternative
-  + Others (please specify)
-- Overall, how satisfied were you with the subscription? (Likert scale: Very Satisfied - Very Unsatisfied)
-- Would you consider using our services in the future? (Likert scale: Very Satisfied - Very Unsatisfied)
-- Would you recommend our company to a colleague, friend or family member? (Likert scale: Very Satisfied - Very Unsatisfied)
+
+- Reason for Cancellation:
+
+  1. Why have you decided to cancel your Foodie-Fi subscription? (Multiple-choice options, including reasons like cost, content quality, lack of time, found an alternative, etc.)
+  Overall Experience:
+
+  2. How would you rate your overall experience with Foodie-Fi? (Scale from 1 to 5, with 1 being very unsatisfactory and 5 being very satisfactory)
+  Content Quality:
+
+  3. Did you find the content on Foodie-Fi to be valuable and engaging? (Yes/No)
+  Competitive Alternatives:
+
+  4. Are you switching to a competing service? If so, which one? (Open-ended)
+
+- Customer Support:
+
+  5. How satisfied were you with the customer support provided by Foodie-Fi? (Scale from 1 to 5)
+  Cancellation Process:
+
+  6. How would you rate the ease of canceling your subscription with Foodie-Fi? (Scale from 1 to 5)
+  Feedback on Improvements:
+
+  7. What improvements or changes could Foodie-Fi make to retain you as a customer? (Open-ended)
+  Favorite Features:
+
+  8. What were your favorite features or aspects of Foodie-Fi during your subscription? (Open-ended)
+  Suggestions for Enhancement:
+
+  9. Do you have any suggestions for how Foodie-Fi can enhance its service? (Open-ended)
+  Likelihood of Return:
+
+  10. On a scale from 1 to 5, how likely are you to return to Foodie-Fi in the future? (1 being very unlikely and 5 being very likely)
+
+- Demographic Information:
+
+  11. Optional: Age, gender, location, and other demographic details (for segmentation and analysis purposes)
+  Additional Comments:
+
+  12. Is there anything else you would like to share about your experience with Foodie-Fi? (Open-ended)
+
 
 ### 5. What business levers could the Foodie-Fi team use to reduce the customer churn rate? How would you validate the effectiveness of your ideas?
-- From the exit survey, look for the most common reasons why customers cancelled the subscription
-  + Price: increase the number of discounts in some seasons of a year, extend the trial time, or add more benefits to customers 
-  + Service quality: work with the relevant department to fix the issue
-  + Found an alternative: do some competitor analysis to see their competitive advantages over us
-- To validate the effectiveness of those ideas, check:
-  + Churn rate
-  + Conversion rate
+
+- **A/B Testing:**
+
+      Conduct A/B tests for different retention strategies, such as new onboarding flows or pricing models.
+      Measure the performance of each variation to identify the most effective approach.
+
+      Validation: Compare the conversion and retention rates of users exposed to different strategies and choose the most successful one.
+
+- **Customer Surveys:**
+
+      Conduct surveys to understand the reasons for churn and identify areas for improvement.
+
+      Validation: Analyze the survey results to identify the most common reasons for churn and prioritize the most pressing issues.
+
+- **Customer Support:**
+  
+      Improve customer support to address issues and concerns that lead to churn.
+  
+      Validation: Measure the impact of improved customer support on churn rate and customer satisfaction.
+
+- **Customer Loyalty Programs:**
+  
+        Offer loyalty programs to reward customers for their continued subscription.
+    
+        Validation: Measure the impact of loyalty programs on churn rate and customer retention.
